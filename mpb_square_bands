@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Dec 14 15:26:26 2020
+
+@author: michael
+"""
+
+import math
+import meep as mp
+from meep import mpb
+import matplotlib.pyplot as plt
+import scipy.io as sio
+import os
+import sys
+from bands_plotting_utils import plot_data as pltd
+from bands_plotting_utils import plot_te as plte
+from bands_plotting_utils import plot_tm as pltm
+
+num_bands = 8
+resolution = 64
+geometry_lattice = mp.Lattice(size=mp.Vector3(1, 1),
+                              basis1=mp.Vector3(0, 1),
+                              basis2=mp.Vector3(1, 0))
+geometry = [mp.Cylinder(0.2, material=mp.Medium(epsilon=12.5))]
+
+# =============================================================================
+# k_points = [mp.Vector3(),          # Gamma 
+#             mp.Vector3(0.5),       # X 
+#             mp.Vector3(0.5, 0.5),  # M 
+#             mp.Vector3()]          # Gamma
+# 
+# =============================================================================
+
+k_points = [
+    mp.Vector3(0.5, 0.5),    # K
+    mp.Vector3(),               # Gamma
+    mp.Vector3(0.5),          # X
+    mp.Vector3(0.5, 0.5)    # K
+]
+
+k_points = mp.interpolate(32, k_points)
+
+ms = mpb.ModeSolver(
+    geometry=geometry,
+    geometry_lattice=geometry_lattice,
+    k_points=k_points,
+    resolution=resolution,
+    num_bands=num_bands
+)
+# =============================================================================
+# ms.run_tm(mpb.output_at_kpoint(mp.Vector3(), mpb.fix_efield_phase,
+#           mpb.output_efield_z))
+# =============================================================================
+
+ms.run_tm()
+tm_freqs = ms.all_freqs
+tm_gaps = ms.gap_list
+ms.run_te()
+te_freqs = ms.all_freqs
+te_gaps = ms.gap_list
+
+
+md = mpb.MPBData(rectify=True, periods=3, resolution=32)
+eps = ms.get_epsilon()
+converted_eps = md.convert(eps)
+
+results = {
+    'tm_freqs': tm_freqs,
+    'te_freqs': te_freqs,
+    'tm_gaps': tm_gaps,
+    'te_gaps': te_gaps
+    }
+sio.savemat(os.path.basename(sys.argv[0]) + "_results.mat", results)
+
+plt.imshow(converted_eps.T, interpolation='spline36', cmap='binary')
+plt.axis('off')
+plt.show()
+
+pltd(tm_freqs, te_freqs, tm_gaps, te_gaps)
+
+plte(te_freqs, te_gaps)
+
+pltm(tm_freqs, tm_gaps)
